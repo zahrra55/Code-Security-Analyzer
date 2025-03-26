@@ -140,16 +140,12 @@ Follow these steps to set up the project locally:
    pip install -r requirements.txt
    ```
 
-4. **Download the Pre-trained Model**:
-   - Download the model from [this link](https://huggingface.co/huggingface/CodeBERTa-small-v1).
-   - Place the model file in the `models/` directory.
-
-5. **Run the Application**:
+4. **Run the Application**:
    ```bash
-   flask run
+   flask --app analyze run
    ```
 
-6. Open your browser and navigate to `http://127.0.0.1:5000`.
+5. Open your browser and navigate to `http://127.0.0.1:5000`.
 
 ---
 
@@ -157,23 +153,38 @@ Follow these steps to set up the project locally:
 
 ```
 security_analyze/
+├── __pycache__/
+│   └── analyze.cpython-312.pyc 
+├── Outputs/
+│   └── Screen_Shoots.pdf 
 ├── static/
 │   ├── css/
-│   │   └── style.css
+│   │   └── style.css          
 │   ├── js/
-│   │   └── script.js
+│   │   └── script.js          
 ├── templates/
-│   └── index.html
-├── models/
-│   └── vulnerability_model.h5
-├── uploads/
-│   ├── example.c
-│   ├── example.py
-├── analyze.py
-├── test_analyze.py
-├── analysis_results.db
-├── requirements.txt
-└── README.md
+│   └── index.html             
+├── testing/
+│   ├── __pycache__/
+│   │   ├── __init__.cpython-312.pyc 
+│   │   ├── test_analyze.cpython-312-pytest-8.3.5.pyc              
+│   ├── .pytest_cache/
+│   │   ├── v/cache/
+│   │    │   ├── lastfailed
+│   │    │   ├── nodeids
+│   │    │   ├── stepwise
+│   │   ├── CACHEDIR.TAG 
+│   │   ├── README.md     
+│   ├── __init__.py               
+│   ├── example.c              
+│   ├── example.py     
+│   ├── test_analyze.py        # Test suite for the application  
+├── analyze.py                 # Main application script
+├── analysis_results.db        # SQLite database for storing analysis results
+├── Code Citations.md
+├── requirements.txt           # Python dependencies
+├── LICENSE
+└── README.md                  # Project documentation
 ```
 
 ---
