@@ -204,7 +204,7 @@ security_analyze/
 
 ### CLI Mode
 
-1. Run the CLI tool with the following command:
+1.Run the CLI tool with the following command:
    ```bash
    python analyze.py --cli
    ```
