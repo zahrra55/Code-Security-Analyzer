@@ -103,5 +103,3 @@ The cited code snippets were used to implement the following features in this pr
 - **File Upload Functionality**: Snippets from Flask X-Ray, HC Morpheus, and Codedump Tests were combined to handle file uploads, validate filenames, and restrict file types.
 - **Secure File Handling**: The Jodel Reversing snippet was used to sanitize filenames and securely save uploaded files.
 - **HTML Templates**: The Aventum Docs snippet provided a base structure for creating user-facing HTML pages.
-
-```

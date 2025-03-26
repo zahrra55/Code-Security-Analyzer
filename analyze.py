@@ -11,6 +11,7 @@ import logging
 import datetime
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+import tempfile 
 
 # Suppress model initialization warnings
 warnings.filterwarnings("ignore", message="Some weights of RobertaForSequenceClassification were not initialized")
@@ -31,7 +32,8 @@ except Exception as e:
 
 # Flask app initialization
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+
+app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 app.config['ALLOWED_EXTENSIONS'] = {'c', 'py', 'java', 'js', 'php'}
 
 # Database initialization
@@ -96,23 +98,49 @@ def analyze_code_vulnerability(code_snippet, language):
         }
         if language in vulnerabilities:
             for vuln in vulnerabilities[language]:
-                if vuln in code_snippet:
+                # Ensure the match is precise (e.g., "eval(" instead of "eval")
+                if vuln in code_snippet and vuln + "(" in code_snippet:
                     logging.info(f"Detected explicit vulnerability: {vuln}")
                     return 1  # Vulnerability detected
+                else:
+                    logging.info(f"No explicit vulnerability detected for: {vuln}")
 
         # Use the model to analyze the code snippet
-        inputs = tokenizer(code_snippet, return_tensors='pt', truncation=True, padding=True, max_length=512)
+        inputs = tokenizer(
+            code_snippet, 
+            return_tensors='pt', 
+            truncation=True, 
+            padding=True, 
+            max_length=512
+        )
         with torch.no_grad():
             outputs = model(**inputs)
         logits = outputs.logits
         prediction = torch.argmax(logits, dim=-1).item()
+
+        # Log detailed information for debugging
         logging.info(f"Model logits: {logits}")
         logging.info(f"Model prediction: {prediction} (1 = Vulnerable, 0 = Secure)")
+
+        # Ensure the model's prediction is valid (0 or 1)
+        if prediction not in [0, 1]:
+            logging.warning(f"Unexpected prediction value: {prediction}. Defaulting to -1.")
+            return -1  # Return -1 for unexpected predictions
+
+        # Fallback: Double-check the model's prediction
+        if prediction == 1:
+            for vuln in vulnerabilities.get(language, []):
+                if vuln in code_snippet:
+                    logging.info(f"Confirmed vulnerability via explicit check: {vuln}")
+                    return 1  # Vulnerability confirmed
+            logging.info("Model predicted vulnerability, but no explicit vulnerabilities found.")
+            return 0  # False positive from the model
+
         return prediction
     except Exception as e:
         logging.error(f"Error analyzing code snippet: {e}")
         return -1  # Return -1 for errors
-    
+            
 def suggest_fix(code_snippet, language):
     """Suggest fixes for common vulnerabilities based on the language."""
     fixes = {

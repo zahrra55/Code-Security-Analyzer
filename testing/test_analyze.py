@@ -1,7 +1,10 @@
 import pytest
-import os
 from analyze import analyze_code_vulnerability, suggest_fix, generate_security_report
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from analyze import analyze_code_vulnerability, suggest_fix, generate_security_report
 def test_analyze_code_vulnerability():
     """Test the analyze_code_vulnerability function."""
     # Test with vulnerable code
