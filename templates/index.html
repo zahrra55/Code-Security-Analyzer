@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Security Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <script>
+        // Apply dark mode immediately if it's enabled in localStorage
+        if (localStorage.getItem("dark-mode") === "true") {
+            document.documentElement.classList.add("dark-mode");
+        }
+    </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=1.0" defer></script>
+    <body>
+    <div id="toggle-animation" class="lottie-container"></div>
+    <h1>Code Security Analyzer</h1>
+    <form action="/" method="POST" enctype="multipart/form-data">
+        <label for="file">Upload a file to analyze:</label>
+        <input type="file" name="file" id="file" required>
+        <button type="submit">Analyze</button>
+    </form>
+
+    {% if result is not none %}
+        <div class="results-container">
+            <h2>Analysis Result</h2>
+            {% if result == 1 %}
+                <p class="warning">⚠️ Vulnerabilities detected!</p>
+                <h3>Recommended Fix:</h3>
+                <pre class="fix">{{ fixed_code }}</pre>
+            {% else %}
+                <p class="success">✅ Code is secure!</p>
+            {% endif %}
+        </div>
+
+        {% if pdf_path %}
+        <div class="download-container">
+            <p>Download your analysis report:</p>
+            <a href="{{ url_for('download_pdf', pdf_path=pdf_path) }}" class="btn btn-download">
+                <i class="fas fa-download"></i> Download PDF Report
+            </a>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <p>No analysis results available. Please upload a file to analyze.</p>
+    {% endif %}
+</body>
+</html>

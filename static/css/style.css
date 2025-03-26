@@ -1,0 +1,317 @@
+/* General Reset */
+body {
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f9;
+    color: #333;
+    line-height: 1.6;
+    margin-left: 20px;
+}
+
+/* Centered Container */
+.container {
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+h1 {
+    text-align: center;
+    color: #444;
+    margin-bottom: 20px;
+}
+
+/* Form Styling */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+form label {
+    font-size: 1.1rem;
+    color: #555;
+}
+
+form input[type="file"] {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: #f9f9f9;
+    cursor: pointer;
+}
+
+/* Form Button */
+form button {
+    padding: 10px 20px;
+    font-size: 1rem;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    width: auto; /* Ensure the button width is determined by its content */
+    max-width: 200px; /* Optional: Set a maximum width for the button */
+}
+
+form button:hover {
+    background-color: #0056b3;
+}
+
+/* Media Query for Small Screens */
+@media (max-width: 768px) {
+    form button {
+        width: auto; /* Prevent the button from stretching to full width */
+        max-width: 150px;
+    }
+}
+/* Analysis Result Section */
+h2 {
+    text-align: center;
+    color: #444;
+    margin-top: 30px;
+}
+
+p {
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+pre {
+    background: #f4f4f9;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-family: Consolas, monospace;
+    font-size: 0.95rem;
+}
+
+/* Success and Warning Messages */
+.success {
+    color: #28a745;
+    font-weight: bold;
+    text-align: center;
+}
+
+.warning {
+    color: #dc3545;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        margin: 20px;
+        padding: 15px;
+    }
+
+    form button {
+        width: 100%;
+    }
+}
+
+
+/* Dark Mode */
+body.dark-mode {
+    background-color: #121212;
+    color: #f4f4f9; /* Text color for dark mode */
+}
+
+/* Container */
+.container {
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.dark-mode .container {
+    background: #1e1e1e;
+    color: #f4f4f9; /* Ensure text inside the container is readable */
+}
+
+body.dark-mode h1 {
+    color: #f4f4f9; /* Light color for dark mode */
+}
+
+body.dark-mode h2 {
+    color: #f4f4f9; /* Light color for dark mode */
+}
+
+
+/* Form Labels and Inputs */
+form label {
+    font-size: 1.1rem;
+    color: #555; /* Default label color for light mode */
+    transition: color 0.3s ease;
+}
+
+/* Code Box (Dark Mode) */
+body.dark-mode pre {
+    background: #333; /* Dark background for dark mode */
+    color: #f4f4f9; /* Light text color for dark mode */
+    border-color: #555; /* Darker border for dark mode */
+}
+
+body.dark-mode form label {
+    color: #ddd; /* Label color for dark mode */
+}
+
+form input[type="file"] {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: #f9f9f9;
+    color: #333; /* Default input text color for light mode */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.dark-mode form input[type="file"] {
+    background: #333;
+    color: #f4f4f9; /* Input text color for dark mode */
+    border-color: #555;
+}
+
+/* Results Section */
+.results-container {
+    margin-top: 30px;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.dark-mode .results-container {
+    background: #1e1e1e;
+    border-color: #333;
+    color: #f4f4f9; /* Ensure text inside the results container is readable */
+}
+
+/* Success and Warning Messages */
+.success {
+    color: #28a745;
+    font-weight: bold;
+    text-align: center;
+}
+
+.warning {
+    color: #dc3545;
+    font-weight: bold;
+    text-align: center;
+}
+
+body.dark-mode .success {
+    color: #81c784; /* Adjust success message color for dark mode */
+}
+
+body.dark-mode .warning {
+    color: #e57373; /* Adjust warning message color for dark mode */
+}
+
+/* Toggle Button */
+.toggle-button {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 40px; /* Reduced width */
+    height: 40px; /* Reduced height */
+    background-color: #4fa4ff;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    overflow: hidden;
+}
+
+.toggle-button:hover {
+    transform: scale(1.1); /* Slightly enlarge the button on hover */
+}
+
+/* Sun and Moon Icons */
+.icon {
+    position: absolute;
+    width: 20px; /* Reduced width */
+    height: 20px; /* Reduced height */
+    border-radius: 50%;
+    transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+/* Sun Icon */
+.sun {
+    background: radial-gradient(circle, #ffdd00 60%, #ffa500 100%);
+    box-shadow: 0 0 10px 2px #ffdd00;
+    transform: translateY(0);
+    opacity: 1;
+}
+
+/* Moon Icon */
+.moon {
+    background: radial-gradient(circle, #f4f4f9 60%, #ccc 100%);
+    box-shadow: 0 0 10px 2px #f4f4f9;
+    transform: translateY(-40px); /* Adjusted for smaller button */
+    opacity: 0;
+}
+
+/* Active State */
+.toggle-button.active .sun {
+    transform: translateY(40px); /* Adjusted for smaller button */
+    opacity: 0;
+}
+
+.toggle-button.active .moon {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+/* Dark Mode Button */
+body.dark-mode .toggle-button {
+    background-color: #444;
+}
+
+body.dark-mode .toggle-button:hover {
+    background-color: #666;
+}
+
+/* Center the download button */
+.download-container {
+    text-align: center; /* Center the button horizontally */
+    margin-top: 20px; /* Add some spacing above the button */
+}
+
+/* Specific styling for the download button */
+.btn-download {
+    display: inline-block;
+    padding: 8px 16px; /* Smaller padding for a smaller button */
+    font-size: 14px; /* Smaller font size */
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    color: #fff;
+    background-color: #28a745; /* Green */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+/* Hover effect for the download button */
+.btn-download:hover {
+    background-color: #218838; /* Darker green */
+}
