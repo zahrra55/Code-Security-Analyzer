@@ -149,46 +149,6 @@ Follow these steps to set up the project locally:
 
 ---
 
-## Project Structure
-
-```
-security_analyze/
-├── __pycache__/
-│   └── analyze.cpython-312.pyc 
-├── Outputs/
-│   └── Screen_Shoots.pdf 
-├── static/
-│   ├── css/
-│   │   └── style.css          
-│   ├── js/
-│   │   └── script.js          
-├── templates/
-│   └── index.html             
-├── testing/
-│   ├── __pycache__/
-│   │   ├── __init__.cpython-312.pyc 
-│   │   ├── test_analyze.cpython-312-pytest-8.3.5.pyc              
-│   ├── .pytest_cache/
-│   │   ├── v/cache/
-│   │    │   ├── lastfailed
-│   │    │   ├── nodeids
-│   │    │   ├── stepwise
-│   │   ├── CACHEDIR.TAG 
-│   │   ├── README.md     
-│   ├── __init__.py               
-│   ├── example.c              
-│   ├── example.py     
-│   ├── test_analyze.py        # Test suite for the application  
-├── analyze.py                 # Main application script
-├── analysis_results.db        # SQLite database for storing analysis results
-├── Code Citations.md
-├── requirements.txt           # Python dependencies
-├── LICENSE
-└── README.md                  # Project documentation
-```
-
----
-
 ## Usage
 
 ### Web Mode
