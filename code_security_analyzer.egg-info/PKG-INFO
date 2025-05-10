@@ -1,0 +1,177 @@
+Metadata-Version: 2.4
+Name: code-security-analyzer
+Version: 1.0.0
+Summary: A comprehensive code security analysis tool
+Home-page: https://github.com/yourusername/code-security-analyzer
+Author: Your Name
+Author-email: your.email@example.com
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: flask
+Requires-Dist: flask-limiter
+Requires-Dist: prometheus-client
+Requires-Dist: transformers
+Requires-Dist: torch
+Requires-Dist: aiohttp
+Requires-Dist: beautifulsoup4
+Requires-Dist: reportlab
+Requires-Dist: python-magic
+Requires-Dist: pyyaml
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Code Security Analyzer
+
+A comprehensive code security analysis tool that helps developers identify and fix security vulnerabilities in their code.
+
+## Features
+
+- **Multi-language Support**: Analyzes Python, JavaScript, Java, C, and PHP code
+- **Real-time Analysis**: Get instant feedback on code security
+- **Vulnerability Detection**: Identifies common security vulnerabilities
+- **Fix Suggestions**: Provides detailed fix suggestions for identified issues
+- **PDF Reports**: Generates comprehensive security reports
+- **API Access**: RESTful API for integration with other tools
+- **Web Interface**: Modern, responsive web UI with dark mode support
+- **Dependency Analysis**: Checks for vulnerable dependencies
+- **Performance Metrics**: Prometheus metrics for monitoring
+- **Rate Limiting**: API rate limiting for production use
+- **Caching**: Efficient caching for improved performance
+- **Async Support**: Asynchronous processing for better scalability
+
+## Project Structure
+
+```
+code-security-analyzer/
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”œâ”€â”€ api/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ routes.py
+â”‚   â”‚   â””â”€â”€ validators.py
+â”‚   â”œâ”€â”€ core/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ analyzer.py
+â”‚   â”‚   â”œâ”€â”€ security.py
+â”‚   â”‚   â””â”€â”€ dependencies.py
+â”‚   â”œâ”€â”€ models/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â””â”€â”€ database.py
+â”‚   â”œâ”€â”€ services/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ report.py
+â”‚   â”‚   â””â”€â”€ cache.py
+â”‚   â””â”€â”€ utils/
+â”‚       â”œâ”€â”€ __init__.py
+â”‚       â””â”€â”€ helpers.py
+â”œâ”€â”€ static/
+â”‚   â”œâ”€â”€ css/
+â”‚   â”‚   â””â”€â”€ styles.css
+â”‚   â””â”€â”€ js/
+â”‚       â””â”€â”€ main.js
+â”œâ”€â”€ templates/
+â”‚   â””â”€â”€ index.html
+â”œâ”€â”€ tests/
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”œâ”€â”€ test_analyzer.py
+â”‚   â””â”€â”€ test_security.py
+â”œâ”€â”€ config/
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â””â”€â”€ settings.py
+â”œâ”€â”€ requirements.txt
+â”œâ”€â”€ setup.py
+â””â”€â”€ README.md
+```
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/code-security-analyzer.git
+cd code-security-analyzer
+```
+
+2. Create a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Web Interface
+
+Start the web server:
+```bash
+python -m app
+```
+
+Visit `http://localhost:5000` in your browser.
+
+### API
+
+The API is available at `http://localhost:5000/api/analyze`:
+
+```bash
+curl -X POST http://localhost:5000/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"code": "your code here", "language": "python"}'
+```
+
+### CLI
+
+Analyze files from the command line:
+```bash
+python -m app --cli
+```
+
+## Development
+
+1. Install development dependencies:
+```bash
+pip install -r requirements-dev.txt
+```
+
+2. Run tests:
+```bash
+pytest
+```
+
+3. Run linting:
+```bash
+flake8
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

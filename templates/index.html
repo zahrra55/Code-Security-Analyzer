@@ -4,47 +4,261 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Security Analyzer</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .dark {
+            color-scheme: dark;
+        }
+        .dark body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .code-editor {
+            font-family: 'Fira Code', monospace;
+        }
+        .loading {
+            display: none;
+        }
+        .loading.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
+    <div class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white dark:bg-gray-800 shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-shield-alt text-blue-600 dark:text-blue-400 text-2xl mr-2"></i>
+                        <span class="text-xl font-bold text-gray-800 dark:text-white">Code Security Analyzer</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button id="themeToggle" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700">
+                            <i class="fas fa-moon dark:hidden"></i>
+                            <i class="fas fa-sun hidden dark:block"></i>
+                        </button>
+                        <a href="/api/docs" class="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
+                            <i class="fas fa-book"></i> API Docs
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- File Upload Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">Analyze Your Code</h2>
+                <form id="uploadForm" class="space-y-4">
+                    <div class="flex items-center justify-center w-full">
+                        <label class="flex flex-col w-full h-32 border-4 border-dashed hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer">
+                            <div class="flex flex-col items-center justify-center pt-7">
+                                <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 dark:text-gray-500"></i>
+                                <p class="pt-1 text-sm tracking-wider text-gray-600 dark:text-gray-400">
+                                    Select a file or drag and drop
+                                </p>
+                            </div>
+                            <input type="file" class="opacity-0" accept=".py,.js,.java,.c,.php" />
+                        </label>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                            <i class="fas fa-search mr-2"></i> Analyze
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="hidden space-y-8">
+                <!-- Analysis Summary -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4">Analysis Summary</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Status</div>
+                            <div id="status" class="text-lg font-semibold"></div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Execution Time</div>
+                            <div id="executionTime" class="text-lg font-semibold"></div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Language</div>
+                            <div id="language" class="text-lg font-semibold"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Display -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4">Analyzed Code</h3>
+                    <pre id="codeDisplay" class="code-editor bg-gray-50 dark:bg-gray-700 p-4 rounded-lg overflow-x-auto"></pre>
+                </div>
+
+                <!-- Fixes Section -->
+                <div id="fixesSection" class="hidden bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4">Recommended Fixes</h3>
+                    <pre id="fixesDisplay" class="code-editor bg-gray-50 dark:bg-gray-700 p-4 rounded-lg overflow-x-auto"></pre>
+                </div>
+
+                <!-- Download Report -->
+                <div class="flex justify-end">
+                    <a id="downloadReport" href="#" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                        <i class="fas fa-download mr-2"></i> Download Report
+                    </a>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="loading fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl">
+                    <div class="flex items-center space-x-4">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <div class="text-lg font-semibold text-gray-800 dark:text-white">Analyzing code...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-php.min.js"></script>
     <script>
-        // Apply dark mode immediately if it's enabled in localStorage
-        if (localStorage.getItem("dark-mode") === "true") {
-            document.documentElement.classList.add("dark-mode");
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const html = document.documentElement;
+        
+        // Check for saved theme preference
+        if (localStorage.getItem('theme') === 'dark' || 
+            (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark');
+        }
+
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+        });
+
+        // File Upload and Analysis
+        const uploadForm = document.getElementById('uploadForm');
+        const results = document.getElementById('results');
+        const loading = document.getElementById('loading');
+        const status = document.getElementById('status');
+        const executionTime = document.getElementById('executionTime');
+        const language = document.getElementById('language');
+        const codeDisplay = document.getElementById('codeDisplay');
+        const fixesSection = document.getElementById('fixesSection');
+        const fixesDisplay = document.getElementById('fixesDisplay');
+        const downloadReport = document.getElementById('downloadReport');
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = uploadForm.querySelector('input[type="file"]');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            loading.classList.add('active');
+            results.classList.add('hidden');
+
+            try {
+                const response = await fetch('/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Analysis failed');
+                }
+
+                const data = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data, 'text/html');
+
+                // Update UI with results
+                status.textContent = doc.querySelector('#status').textContent;
+                executionTime.textContent = doc.querySelector('#executionTime').textContent;
+                language.textContent = doc.querySelector('#language').textContent;
+                codeDisplay.textContent = doc.querySelector('#codeDisplay').textContent;
+                
+                const fixes = doc.querySelector('#fixesDisplay');
+                if (fixes) {
+                    fixesSection.classList.remove('hidden');
+                    fixesDisplay.textContent = fixes.textContent;
+                } else {
+                    fixesSection.classList.add('hidden');
+                }
+
+                // Set up download link
+                const pdfPath = doc.querySelector('#downloadReport').href;
+                downloadReport.href = pdfPath;
+
+                // Highlight code
+                Prism.highlightElement(codeDisplay);
+                if (fixes) {
+                    Prism.highlightElement(fixesDisplay);
+                }
+
+                results.classList.remove('hidden');
+            } catch (error) {
+                alert('Error analyzing file: ' + error.message);
+            } finally {
+                loading.classList.remove('active');
+            }
+        });
+
+        // Drag and drop support
+        const dropZone = document.querySelector('label');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('border-blue-500');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('border-blue-500');
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            const fileInput = uploadForm.querySelector('input[type="file"]');
+            fileInput.files = files;
         }
     </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=1.0" defer></script>
-    <body>
-    <div id="toggle-animation" class="lottie-container"></div>
-    <h1>Code Security Analyzer</h1>
-    <form action="/" method="POST" enctype="multipart/form-data">
-        <label for="file">Upload a file to analyze:</label>
-        <input type="file" name="file" id="file" required>
-        <button type="submit">Analyze</button>
-    </form>
-
-    {% if result is not none %}
-        <div class="results-container">
-            <h2>Analysis Result</h2>
-            {% if result == 1 %}
-                <p class="warning">⚠️ Vulnerabilities detected!</p>
-                <h3>Recommended Fix:</h3>
-                <pre class="fix">{{ fixed_code }}</pre>
-            {% else %}
-                <p class="success">✅ Code is secure!</p>
-            {% endif %}
-        </div>
-
-        {% if pdf_path %}
-        <div class="download-container">
-            <p>Download your analysis report:</p>
-            <a href="{{ url_for('download_pdf', pdf_path=pdf_path) }}" class="btn btn-download">
-                <i class="fas fa-download"></i> Download PDF Report
-            </a>
-        </div>
-        {% endif %}
-
-    {% else %}
-        <p>No analysis results available. Please upload a file to analyze.</p>
-    {% endif %}
 </body>
 </html>

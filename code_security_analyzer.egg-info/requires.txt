@@ -1,0 +1,10 @@
+flask
+flask-limiter
+prometheus-client
+transformers
+torch
+aiohttp
+beautifulsoup4
+reportlab
+python-magic
+pyyaml

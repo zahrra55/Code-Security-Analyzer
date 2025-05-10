@@ -11,7 +11,31 @@ import logging
 import datetime
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-import tempfile 
+import tempfile
+from functools import lru_cache
+import hashlib
+from typing import Dict, List, Optional, Tuple, Any, Union
+import numpy as np
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.exceptions import HTTPException
+import traceback
+from app.core.security import SecurityChecker, Vulnerability
+from app.core.dependencies import check_dependencies
+from app.utils.helpers import get_file_extension
+from app.api.validators import allowed_file
+from app.core.analyzer import CodeAnalyzer
+from app.services.report import generate_security_report
+from app.models.database import DatabaseConnection, save_analysis_result
+from prometheus_client import Counter, Histogram, generate_latest
+import threading
+from queue import Queue
+import asyncio
+from aiohttp import ClientSession
+import aiohttp
+import ssl
+import certifi
+import json
 
 # Suppress model initialization warnings
 warnings.filterwarnings("ignore", message="Some weights of RobertaForSequenceClassification were not initialized")
@@ -20,28 +44,87 @@ logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load fine-tuned model and tokenizer
-MODEL_NAME = "huggingface/CodeBERTa-small-v1"
-try:
-    tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME)
-    model = RobertaForSequenceClassification.from_pretrained(MODEL_NAME)
-    logging.info("Model and tokenizer loaded successfully.")
-except Exception as e:
-    logging.error(f"Error loading model or tokenizer: {e}")
-    raise
+# Prometheus metrics
+ANALYSIS_COUNTER = Counter('code_analysis_total', 'Total number of code analyses')
+ANALYSIS_DURATION = Histogram('code_analysis_duration_seconds', 'Time spent analyzing code')
+VULNERABILITY_COUNTER = Counter('vulnerabilities_detected_total', 'Total number of vulnerabilities detected', ['severity'])
+
+# Global variables for caching
+CACHE_SIZE = 1000
+MODEL_CACHE: Dict[str, Tuple[torch.nn.Module, torch.nn.Module]] = {}
+CODE_CACHE: Dict[str, int] = {}
+
+# Initialize security checker
+security_checker = SecurityChecker()
+
+# Load fine-tuned model and tokenizer with caching
+def load_model(model_name: str = "huggingface/CodeBERTa-small-v1") -> Tuple[torch.nn.Module, torch.nn.Module]:
+    """Load model and tokenizer with caching."""
+    if model_name in MODEL_CACHE:
+        return MODEL_CACHE[model_name]
+    
+    try:
+        tokenizer = RobertaTokenizer.from_pretrained(model_name)
+        model = RobertaForSequenceClassification.from_pretrained(model_name)
+        model.eval()  # Set to evaluation mode
+        if torch.cuda.is_available():
+            model = model.cuda()
+        MODEL_CACHE[model_name] = (model, tokenizer)
+        logging.info("Model and tokenizer loaded successfully.")
+        return model, tokenizer
+    except Exception as e:
+        logging.error(f"Error loading model or tokenizer: {e}")
+        raise
+
+# Initialize model and tokenizer
+model, tokenizer = load_model()
 
 # Flask app initialization
 app = Flask(__name__)
-
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 app.config['ALLOWED_EXTENSIONS'] = {'c', 'py', 'java', 'js', 'php'}
 
-# Database initialization
+# Rate limiting configuration
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+# Database initialization with connection pooling
+class DatabaseConnection:
+    _instance = None
+    _pool = []
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(DatabaseConnection, cls).__new__(cls)
+        return cls._instance
+
+    def get_connection(self):
+        with self._lock:
+            if not self._pool:
+                conn = sqlite3.connect(DB_FILE)
+                conn.row_factory = sqlite3.Row
+                self._pool.append(conn)
+            return self._pool[0]
+
+    def close_all(self):
+        with self._lock:
+            for conn in self._pool:
+                conn.close()
+            self._pool.clear()
+
+# Initialize database with connection pooling
 DB_FILE = "analysis_results.db"
+db = DatabaseConnection()
 
 def init_db():
-    """Initialize the SQLite database."""
-    conn = sqlite3.connect(DB_FILE)
+    """Initialize the SQLite database with optimized schema."""
+    conn = db.get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS analysis_results (
@@ -50,62 +133,84 @@ def init_db():
             language TEXT,
             prediction INTEGER,
             fixed_code TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            code_hash TEXT,
+            vulnerabilities TEXT,
+            severity_counts TEXT,
+            INDEX idx_code_hash (code_hash),
+            INDEX idx_timestamp (timestamp)
         )
     """)
     conn.commit()
-    conn.close()
 
-def save_result(filename, language, prediction, fixed_code):
-    """Save analysis results to the database."""
-    conn = sqlite3.connect(DB_FILE)
+@lru_cache(maxsize=CACHE_SIZE)
+def get_code_hash(code: str) -> str:
+    """Generate a hash for the code snippet."""
+    return hashlib.md5(code.encode()).hexdigest()
+
+def save_result(filename: str, language: str, prediction: int, fixed_code: str, code: str, vulnerabilities: List[Vulnerability]):
+    """Save analysis results to the database with caching."""
+    code_hash = get_code_hash(code)
+    conn = db.get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO analysis_results (filename, language, prediction, fixed_code)
-        VALUES (?, ?, ?, ?)
-    """, (filename, language, prediction, fixed_code))
-    conn.commit()
-    conn.close()
-
-# Helper functions
-def allowed_file(filename):
-    """Check if the uploaded file has an allowed extension."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-
-def detect_language(file_path):
-    """Detect the programming language based on the file extension."""
-    _, ext = os.path.splitext(file_path)
-    language_map = {
-        '.c': 'c',
-        '.h': 'c',
-        '.py': 'python',
-        '.java': 'java',
-        '.js': 'javascript',
-        '.php': 'php'
+    
+    # Convert vulnerabilities to JSON
+    vuln_json = json.dumps([{
+        'type': v.type.value,
+        'line_number': v.line_number,
+        'code_snippet': v.code_snippet,
+        'severity': v.severity,
+        'description': v.description,
+        'fix_suggestion': v.fix_suggestion
+    } for v in vulnerabilities])
+    
+    # Get severity counts
+    severity_counts = {
+        'Critical': 0,
+        'High': 0,
+        'Medium': 0,
+        'Low': 0
     }
-    return language_map.get(ext, 'unknown')
+    for v in vulnerabilities:
+        severity_counts[v.severity] += 1
+    
+    cursor.execute("""
+        INSERT INTO analysis_results (
+            filename, language, prediction, fixed_code, code_hash,
+            vulnerabilities, severity_counts
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        filename, language, prediction, fixed_code, code_hash,
+        vuln_json, json.dumps(severity_counts)
+    ))
+    conn.commit()
 
-def analyze_code_vulnerability(code_snippet, language):
-    """Analyze code snippet for vulnerabilities using explicit checks and the fine-tuned model."""
+async def check_dependencies(code: str, language: str) -> List[Dict[str, Any]]:
+    """Check for vulnerable dependencies."""
+    # This is a placeholder for actual dependency checking
+    # In a real implementation, you would:
+    # 1. Parse package files (requirements.txt, package.json, etc.)
+    # 2. Query vulnerability databases
+    # 3. Return results
+    return []
+
+def analyze_code_vulnerability(code_snippet: str, language: str) -> Tuple[int, List[Vulnerability]]:
+    """Analyze code snippet for vulnerabilities using optimized checks and the fine-tuned model."""
     try:
-        # Explicitly check for known vulnerabilities
-        vulnerabilities = {
-            'c': ["gets(", "strcpy("],
-            'python': ["eval(", "exec("],
-            'java': ["System.exec(", "Runtime.getRuntime().exec("],
-            'javascript': ["eval(", "Function("],
-            'php': ["eval(", "exec("]
-        }
-        if language in vulnerabilities:
-            for vuln in vulnerabilities[language]:
-                # Ensure the match is precise (e.g., "eval(" instead of "eval")
-                if vuln in code_snippet and vuln + "(" in code_snippet:
-                    logging.info(f"Detected explicit vulnerability: {vuln}")
-                    return 1  # Vulnerability detected
-                else:
-                    logging.info(f"No explicit vulnerability detected for: {vuln}")
+        # Check cache first
+        code_hash = get_code_hash(code_snippet)
+        if code_hash in CODE_CACHE:
+            return CODE_CACHE[code_hash], []
 
-        # Use the model to analyze the code snippet
+        # Get vulnerabilities from security checker
+        vulnerabilities = security_checker.check_code(code_snippet, language)
+        
+        # Update metrics
+        for vuln in vulnerabilities:
+            VULNERABILITY_COUNTER.labels(severity=vuln.severity).inc()
+
+        # Use the model for additional analysis
         inputs = tokenizer(
             code_snippet, 
             return_tensors='pt', 
@@ -113,212 +218,110 @@ def analyze_code_vulnerability(code_snippet, language):
             padding=True, 
             max_length=512
         )
+        
+        if torch.cuda.is_available():
+            inputs = {k: v.cuda() for k, v in inputs.items()}
+
         with torch.no_grad():
             outputs = model(**inputs)
-        logits = outputs.logits
-        prediction = torch.argmax(logits, dim=-1).item()
+            logits = outputs.logits
+            prediction = torch.argmax(logits, dim=-1).item()
 
-        # Log detailed information for debugging
-        logging.info(f"Model logits: {logits}")
-        logging.info(f"Model prediction: {prediction} (1 = Vulnerable, 0 = Secure)")
+        # Cache the result
+        CODE_CACHE[code_hash] = prediction
+        return prediction, vulnerabilities
 
-        # Ensure the model's prediction is valid (0 or 1)
-        if prediction not in [0, 1]:
-            logging.warning(f"Unexpected prediction value: {prediction}. Defaulting to -1.")
-            return -1  # Return -1 for unexpected predictions
-
-        # Fallback: Double-check the model's prediction
-        if prediction == 1:
-            for vuln in vulnerabilities.get(language, []):
-                if vuln in code_snippet:
-                    logging.info(f"Confirmed vulnerability via explicit check: {vuln}")
-                    return 1  # Vulnerability confirmed
-            logging.info("Model predicted vulnerability, but no explicit vulnerabilities found.")
-            return 0  # False positive from the model
-
-        return prediction
     except Exception as e:
         logging.error(f"Error analyzing code snippet: {e}")
-        return -1  # Return -1 for errors
-            
-def suggest_fix(code_snippet, language):
-    """Suggest fixes for common vulnerabilities based on the language."""
-    fixes = {
-        'c': {
-            "gets(": "fgets(input, sizeof(input), stdin);",
-            "strcpy(": "strncpy(buffer, input, sizeof(buffer) - 1); buffer[sizeof(buffer) - 1] = '\\0';"
-        },
-        'python': {
-            "eval(": "# Avoid using eval; consider safer alternatives like ast.literal_eval\n",
-            "exec(": "# Avoid using exec; consider safer alternatives\n"
-        },
-        'java': {
-            "System.exec(": "// Avoid using System.exec; consider safer alternatives\n",
-            "Runtime.getRuntime().exec(": "// Avoid using Runtime.exec; consider safer alternatives\n"
-        },
-        'javascript': {
-            "eval(": "// Avoid using eval; consider safer alternatives\n",
-            "Function(": "// Avoid using Function constructor; consider safer alternatives\n"
-        },
-        'php': {
-            "eval(": "// Avoid using eval; consider safer alternatives\n",
-            "exec(": "// Avoid using exec; consider safer alternatives\n"
-        }
+        return -1, []
+
+async def analyze_code_async(code: str, language: str) -> Dict[str, Any]:
+    """Asynchronous code analysis with multiple checks."""
+    start_time = time.time()
+    
+    # Run ML model and security checks
+    prediction, vulnerabilities = analyze_code_vulnerability(code, language)
+    
+    # Check dependencies
+    dependency_vulns = await check_dependencies(code, language)
+    
+    # Generate fix suggestions
+    fixed_code = suggest_fix(code, language) if prediction == 1 else None
+    
+    # Get vulnerability summary
+    vuln_summary = security_checker.get_vulnerability_summary(vulnerabilities)
+    
+    # Update metrics
+    ANALYSIS_COUNTER.inc()
+    ANALYSIS_DURATION.observe(time.time() - start_time)
+    
+    return {
+        "prediction": prediction,
+        "vulnerabilities": vuln_summary,
+        "dependency_vulnerabilities": dependency_vulns,
+        "fixed_code": fixed_code,
+        "execution_time": time.time() - start_time
     }
 
-    # Check for vulnerabilities and suggest fixes
-    if language in fixes:
-        fixed_code = code_snippet
-        found_vulnerability = False
-        for vuln, fix in fixes[language].items():
-            if vuln in code_snippet:
-                logging.info(f"Detected vulnerability: {vuln}. Suggesting fix: {fix}")
-                fixed_code = fixed_code.replace(vuln, fix)
-                found_vulnerability = True
-        return fixed_code if found_vulnerability else None
-    else:
-        logging.info(f"No fixes available for language: {language}")
-        return None
-    
-def generate_security_report(filename, code, prediction, execution_time, fixed_code=None, output_dir="."):
-    """Generate a PDF security report using reportlab."""
+@app.route("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    return generate_latest()
+
+class APIError(Exception):
+    def __init__(self, message, status_code=400):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+@app.route("/api/analyze", methods=["POST"])
+@limiter.limit("10 per minute")
+async def api_analyze():
+    """REST API for analyzing code with rate limiting."""
     try:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        pdf_path = os.path.join(output_dir, f"{filename}_security_report_{timestamp}.pdf")
-        c = canvas.Canvas(pdf_path, pagesize=letter)
-        c.setFont("Helvetica", 12)
-        c.drawString(72, 750, "Code Security Analysis Report")
-        c.drawString(72, 730, f"File: {filename}")
-        c.drawString(72, 710, f"Execution Time: {execution_time:.4f} seconds")
-        c.drawString(72, 690, "Analyzed Code:")
+        data = request.get_json()
+        if not data:
+            raise APIError("No JSON data provided", 400)
+
+        code = data.get("code")
+        language = data.get("language")
+
+        if not code:
+            raise APIError("Code is required", 400)
+        if not language:
+            raise APIError("Language is required", 400)
+
+        # Validate language
+        if language not in app.config['ALLOWED_EXTENSIONS']:
+            raise APIError(f"Unsupported language. Supported languages: {', '.join(app.config['ALLOWED_EXTENSIONS'])}", 400)
+
+        # Analyze code
+        result = await analyze_code_async(code, language)
         
-        # Adjust the starting position for the code block
-        y_position = 670
-        line_height = 14  # Adjust line height as needed
-        
-        # Split the code into lines and draw each line
-        for line in code[:1000].split('\n'):  # Truncate long code
-            c.drawString(72, y_position, line)
-            y_position -= line_height
-        
-        if prediction == 1:
-            c.setFillColorRGB(1, 0, 0)  # Red
-            c.drawString(72, y_position - line_height, "⚠️  Vulnerabilities detected!")
-            c.setFillColorRGB(0, 0, 0)  # Black
-            c.drawString(72, y_position - 2 * line_height, "🔴 Vulnerability detected in the code.")
-            if fixed_code:
-                c.drawString(72, y_position - 3 * line_height, "✅ Recommended Fix:")
-                y_position -= 4 * line_height
-                for line in fixed_code[:1000].split('\n'):  # Truncate long code
-                    c.drawString(72, y_position, line)
-                    y_position -= line_height
-        else:
-            c.setFillColorRGB(0, 0.5, 0)  # Green
-            c.drawString(72, y_position - line_height, "✅ Code is secure!")
-        
-        c.save()
-        logging.info(f"Analysis report saved to {pdf_path}")
-        return pdf_path  # Return the path of the generated PDF
+        # Save result
+        save_result(
+            "api_request",
+            language,
+            result["prediction"],
+            result["fixed_code"],
+            code,
+            result["vulnerabilities"]["vulnerabilities"]
+        )
+
+        return jsonify({
+            "status": "success",
+            **result
+        })
+
+    except APIError as e:
+        raise e
     except Exception as e:
-        logging.error(f"Error generating security report: {e}")
-        return None
-
-def interactive_cli():
-    """Interactive CLI for analyzing code."""
-    print("Welcome to the Code Security Analyzer CLI!")
-    print("Type 'exit' to quit.")
-    while True:
-        print("\nOptions:")
-        print("1. Analyze a code snippet")
-        print("2. Analyze a file")
-        choice = input("Enter your choice (1/2): ").strip()
-        if choice == "exit":
-            print("Exiting CLI. Goodbye!")
-            break
-        elif choice == "1":
-            code = input("Enter the code snippet to analyze:\n")
-            language = input("Enter the programming language (e.g., python, c, java): ").strip().lower()
-            start_time = time.time()
-            prediction = analyze_code_vulnerability(code, language)
-            execution_time = time.time() - start_time
-            fixed_code = suggest_fix(code, language) if prediction == 1 else None
-            print("\nAnalysis Result:")
-            if prediction == 1:
-                print("⚠️ Vulnerabilities detected!")
-                print("Recommended Fix:\n", fixed_code)
-            else:
-                print("✅ Code is secure!")
-
-            # Generate the PDF report
-            generate_security_report("snippet", code, prediction, execution_time, fixed_code)
-        elif choice == "2":
-            file_path = input("Enter the file path to analyze: ").strip()
-            if not os.path.exists(file_path):
-                print("Error: File not found!")
-                continue
-            with open(file_path, 'r') as f:
-                code = f.read()
-            language = detect_language(file_path)
-            start_time = time.time()
-            prediction = analyze_code_vulnerability(code, language)
-            execution_time = time.time() - start_time
-            fixed_code = suggest_fix(code, language) if prediction == 1 else None
-            print("\nAnalysis Result:")
-            if prediction == 1:
-                print("⚠️ Vulnerabilities detected!")
-                print("Recommended Fix:\n", fixed_code)
-            else:
-                print("✅ Code is secure!")
-
-            # Generate the PDF report
-            generate_security_report(file_path, code, prediction, execution_time, fixed_code)
-        else:
-            print("Invalid choice. Please try again.")
-
-def analyze_files_parallel(file_paths):
-    """Analyze multiple files in parallel."""
-    def analyze_file(file_path):
-        if not os.path.exists(file_path):
-            return {"file": file_path, "error": "File not found"}
-        with open(file_path, 'r') as f:
-            code = f.read()
-        language = detect_language(file_path)
-        prediction = analyze_code_vulnerability(code, language)
-        fixed_code = suggest_fix(code, language) if prediction == 1 else None
-        return {
-            "file": file_path,
-            "prediction": prediction,
-            "fixed_code": fixed_code
-        }
-
-    results = []
-    with ThreadPoolExecutor() as executor:
-        futures = {executor.submit(analyze_file, file_path): file_path for file_path in file_paths}
-        for future in futures:
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                results.append({"file": futures[future], "error": str(e)})
-
-    # Print results
-    for result in results:
-        print(f"\nFile: {result['file']}")
-        if "error" in result:
-            print(f"Error: {result['error']}")
-        else:
-            if result["prediction"] == 1:
-                print("⚠️ Vulnerabilities detected!")
-                print("Recommended Fix:\n", result["fixed_code"])
-            else:
-                print("✅ Code is secure!")
-
-                
-# Flask routes
-from flask import send_file
+        logging.error(f"Error in API: {str(e)}")
+        logging.error(traceback.format_exc())
+        raise APIError("An internal error occurred", 500)
 
 @app.route("/", methods=["GET", "POST"])
-def index():
+async def index():
     """Flask web interface for analyzing code."""
     if request.method == "POST":
         if 'file' not in request.files:
@@ -333,72 +336,218 @@ def index():
             with open(file_path, 'r') as f:
                 code = f.read()
             language = detect_language(file_path)
-            start_time = time.time()
-            prediction = analyze_code_vulnerability(code, language)
-            execution_time = time.time() - start_time
-            fixed_code = suggest_fix(code, language) if prediction == 1 else None
-            save_result(filename, language, prediction, fixed_code)
+            
+            # Analyze code
+            result = await analyze_code_async(code, language)
+            
+            # Save result
+            save_result(
+                filename,
+                language,
+                result["prediction"],
+                result["fixed_code"],
+                code,
+                result["vulnerabilities"]["vulnerabilities"]
+            )
 
             # Generate the PDF report
-            pdf_path = generate_security_report(filename, code, prediction, execution_time, fixed_code)
+            pdf_path = generate_security_report(
+                filename,
+                code,
+                result["prediction"],
+                result["execution_time"],
+                result["fixed_code"],
+                result["vulnerabilities"],
+                result["dependency_vulnerabilities"]
+            )
 
-            # Render the results and provide a link to download the PDF
+            # Render the results
             return render_template(
                 "index.html",
-                execution_time=execution_time,
-                result=prediction,
+                execution_time=result["execution_time"],
+                result=result["prediction"],
                 code=code,
-                fixed_code=fixed_code,
-                pdf_path=pdf_path
+                fixed_code=result["fixed_code"],
+                pdf_path=pdf_path,
+                vulnerabilities=result["vulnerabilities"],
+                dependency_vulnerabilities=result["dependency_vulnerabilities"]
             )
     return render_template("index.html")
 
-@app.route("/api/analyze", methods=["POST"])
-def api_analyze():
-    """REST API for analyzing code."""
+def generate_security_report(filename: str, code: str, prediction: int, execution_time: float,
+                           fixed_code: str, vulnerabilities: Dict[str, Any], output_dir: str = ".") -> str:
+    """Generate a comprehensive PDF security report."""
     try:
-        data = request.get_json()
-        code = data.get("code")
-        language = data.get("language")
-        if not code or not language:
-            return jsonify({"error": "Code and language are required"}), 400
-        prediction = analyze_code_vulnerability(code, language)
-        fixed_code = suggest_fix(code, language) if prediction == 1 else None
-        return jsonify({
-            "prediction": prediction,
-            "fixed_code": fixed_code
-        })
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_path = os.path.join(output_dir, f"{filename}_security_report_{timestamp}.pdf")
+        c = canvas.Canvas(pdf_path, pagesize=letter)
+        
+        # Title
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(72, 750, "Code Security Analysis Report")
+        
+        # File Information
+        c.setFont("Helvetica", 12)
+        c.drawString(72, 720, f"File: {filename}")
+        c.drawString(72, 700, f"Analysis Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        c.drawString(72, 680, f"Execution Time: {execution_time:.4f} seconds")
+        
+        # Vulnerability Summary
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, 650, "Vulnerability Summary")
+        c.setFont("Helvetica", 12)
+        
+        y_position = 630
+        c.drawString(72, y_position, f"Total Vulnerabilities: {vulnerabilities['total_vulnerabilities']}")
+        
+        # Severity Distribution
+        y_position -= 20
+        c.drawString(72, y_position, "Severity Distribution:")
+        y_position -= 20
+        for severity, count in vulnerabilities['severity_counts'].items():
+            c.drawString(92, y_position, f"{severity}: {count}")
+            y_position -= 20
+        
+        # Vulnerability Types
+        y_position -= 20
+        c.drawString(72, y_position, "Vulnerability Types:")
+        y_position -= 20
+        for vuln_type, count in vulnerabilities['type_counts'].items():
+            c.drawString(92, y_position, f"{vuln_type}: {count}")
+            y_position -= 20
+        
+        # Detailed Vulnerabilities
+        y_position -= 20
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, y_position, "Detailed Vulnerabilities")
+        c.setFont("Helvetica", 12)
+        
+        for vuln in vulnerabilities['vulnerabilities']:
+            y_position -= 20
+            if y_position < 50:  # Start new page if needed
+                c.showPage()
+                y_position = 750
+                c.setFont("Helvetica", 12)
+            
+            c.drawString(72, y_position, f"Type: {vuln['type']}")
+            y_position -= 20
+            c.drawString(72, y_position, f"Severity: {vuln['severity']}")
+            y_position -= 20
+            c.drawString(72, y_position, f"Line: {vuln['line_number']}")
+            y_position -= 20
+            c.drawString(72, y_position, f"Description: {vuln['description']}")
+            y_position -= 20
+            c.drawString(72, y_position, f"Fix: {vuln['fix_suggestion']}")
+            y_position -= 20
+            c.drawString(72, y_position, f"Code: {vuln['code_snippet']}")
+            y_position -= 40
+        
+        # Analyzed Code
+        c.showPage()
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, 750, "Analyzed Code")
+        c.setFont("Helvetica", 12)
+        
+        y_position = 730
+        for line in code[:1000].split('\n'):
+            c.drawString(72, y_position, line)
+            y_position -= 15
+            if y_position < 50:
+                c.showPage()
+                y_position = 750
+                c.setFont("Helvetica", 12)
+        
+        # Fixed Code (if any)
+        if fixed_code:
+            c.showPage()
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(72, 750, "Recommended Fixes")
+            c.setFont("Helvetica", 12)
+            
+            y_position = 730
+            for line in fixed_code[:1000].split('\n'):
+                c.drawString(72, y_position, line)
+                y_position -= 15
+                if y_position < 50:
+                    c.showPage()
+                    y_position = 750
+                    c.setFont("Helvetica", 12)
+        
+        c.save()
+        logging.info(f"Analysis report saved to {pdf_path}")
+        return pdf_path
     except Exception as e:
-        logging.error(f"Error in API: {e}")
-        return jsonify({"error": "An internal error occurred"}), 500
+        logging.error(f"Error generating security report: {e}")
+        return None
 
-@app.route("/download/<path:pdf_path>")
-def download_pdf(pdf_path):
-    """Serve the generated PDF report for download."""
-    try:
-        return send_file(pdf_path, as_attachment=True)
-    except Exception as e:
-        logging.error(f"Error serving PDF file: {e}")
-        return jsonify({"error": "File not found"}), 404
-    
+def detect_language(filename: str) -> str:
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    ext_map = {
+        'py': 'python',
+        'js': 'javascript',
+        'java': 'java',
+        'c': 'c',
+        'php': 'php'
+    }
+    return ext_map.get(ext, 'unknown')
+
+def suggest_fix(code: str, language: str):
+    analyzer = CodeAnalyzer()
+    vulnerabilities = analyzer.security_checker.check_code(code, language)
+    return analyzer._suggest_fixes(code, language, vulnerabilities)
+
+def interactive_cli():
+    print("Interactive CLI mode. Type 'exit' to quit.")
+    while True:
+        code = input("Enter code (or 'exit' to quit): ")
+        if code.strip().lower() == 'exit':
+            break
+        language = input("Enter language (python, javascript, java, c, php): ")
+        if language.strip().lower() == 'exit':
+            break
+        result = analyze_code_vulnerability(code, language)
+        print(f"Prediction: {result}")
+
+def analyze_files_parallel(file_paths):
+    from concurrent.futures import ThreadPoolExecutor
+    import os
+    import json
+    import asyncio
+    def analyze_file(file_path):
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return
+        with open(file_path, 'r') as f:
+            code = f.read()
+        language = detect_language(file_path)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(analyze_code_async(code, language))
+        print(f"Analysis for {file_path}:")
+        print(json.dumps(result, indent=2))
+    with ThreadPoolExecutor() as executor:
+        executor.map(analyze_file, file_paths)
+
 def main():
     """Main function to handle command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs='*', help="File paths to analyze")
     parser.add_argument("--cli", action="store_true", help="Start interactive CLI mode")
     parser.add_argument("--web", action="store_true", help="Start web UI")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind the web server")
+    parser.add_argument("--port", type=int, default=5000, help="Port to bind the web server")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
 
     if args.cli:
         interactive_cli()
     elif args.web:
         init_db()
-        app.run(debug=True)
+        app.run(host=args.host, port=args.port, debug=args.debug)
     elif args.files:
         analyze_files_parallel(args.files)
     else:
         print("No input provided. Use --cli, --web, or specify file paths.")
 
-        
 if __name__ == "__main__":
     main()
