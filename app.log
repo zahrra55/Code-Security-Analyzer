@@ -1,0 +1,77 @@
+2025-05-10 18:51:49,989 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 18:51:50,002 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 18:53:36,645 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 18:53:36,656 - app.models.database - ERROR - Error getting database connection: Working outside of application context.
+
+This typically means that you attempted to use functionality that needed
+the current application. To solve this, set up an application context
+with app.app_context(). See the documentation for more information.
+2025-05-10 18:53:36,664 - app.models.database - ERROR - Error initializing database: Working outside of application context.
+
+This typically means that you attempted to use functionality that needed
+the current application. To solve this, set up an application context
+with app.app_context(). See the documentation for more information.
+2025-05-10 18:53:44,035 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 18:53:44,044 - app.models.database - ERROR - Error getting database connection: Working outside of application context.
+
+This typically means that you attempted to use functionality that needed
+the current application. To solve this, set up an application context
+with app.app_context(). See the documentation for more information.
+2025-05-10 18:53:44,050 - app.models.database - ERROR - Error initializing database: Working outside of application context.
+
+This typically means that you attempted to use functionality that needed
+the current application. To solve this, set up an application context
+with app.app_context(). See the documentation for more information.
+2025-05-10 18:55:53,932 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 18:55:53,944 - app.models.database - ERROR - Error getting database connection: near "INDEX": syntax error
+2025-05-10 18:55:53,946 - app.models.database - ERROR - Error initializing database: Cannot operate on a closed database.
+2025-05-10 18:55:53,950 - app - ERROR - Error initializing database: Cannot operate on a closed database.
+2025-05-10 18:57:47,788 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 18:57:47,833 - app.models.database - ERROR - Error getting database connection: no such column: code_hash
+2025-05-10 18:57:47,836 - app.models.database - ERROR - Error initializing database: Cannot operate on a closed database.
+2025-05-10 18:57:47,838 - app - ERROR - Error initializing database: Cannot operate on a closed database.
+2025-05-10 19:03:19,287 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 19:03:20,008 - app.models.database - INFO - Database initialized successfully
+2025-05-10 19:03:20,010 - app - INFO - Database initialized successfully
+2025-05-10 19:03:20,222 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-05-10 19:03:20,224 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-10 19:03:20,235 - werkzeug - INFO -  * Restarting with stat
+2025-05-10 19:04:08,882 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 19:04:08,901 - app.models.database - INFO - Database initialized successfully
+2025-05-10 19:04:08,904 - app - INFO - Database initialized successfully
+2025-05-10 19:04:08,984 - werkzeug - WARNING -  * Debugger is active!
+2025-05-10 19:04:09,044 - werkzeug - INFO -  * Debugger PIN: 851-510-513
+2025-05-10 19:04:09,169 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:04:09] "[33mGET / HTTP/1.1[0m" 404 -
+2025-05-10 19:04:09,254 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:04:09] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-10 19:04:09,647 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:04:09] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-10 19:05:09,805 - werkzeug - INFO -  * Detected change in 'E:\\cursor\\projects\\Code-Security-Analyzer\\app\\__init__.py', reloading
+2025-05-10 19:05:13,255 - werkzeug - INFO -  * Restarting with stat
+2025-05-10 19:06:11,716 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 19:06:11,731 - app.models.database - INFO - Database initialized successfully
+2025-05-10 19:06:11,733 - app - INFO - Database initialized successfully
+2025-05-10 19:06:11,869 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-05-10 19:06:11,871 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-10 19:06:11,881 - werkzeug - INFO -  * Restarting with stat
+2025-05-10 19:06:56,156 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 19:06:56,181 - app.models.database - INFO - Database initialized successfully
+2025-05-10 19:06:56,186 - app - INFO - Database initialized successfully
+2025-05-10 19:06:56,308 - werkzeug - WARNING -  * Debugger is active!
+2025-05-10 19:06:56,404 - werkzeug - INFO -  * Debugger PIN: 851-510-513
+2025-05-10 19:06:56,563 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:06:56] "[33mGET / HTTP/1.1[0m" 404 -
+2025-05-10 19:06:56,646 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:06:56] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-10 19:09:44,102 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 19:09:44,121 - app.models.database - INFO - Database initialized successfully
+2025-05-10 19:09:44,123 - app - INFO - Database initialized successfully
+2025-05-10 19:09:44,231 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-05-10 19:09:44,233 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-10 19:09:44,243 - werkzeug - INFO -  * Restarting with stat
+2025-05-10 19:10:35,298 - app.core.analyzer - INFO - Model and tokenizer loaded successfully
+2025-05-10 19:10:35,320 - app.models.database - INFO - Database initialized successfully
+2025-05-10 19:10:35,322 - app - INFO - Database initialized successfully
+2025-05-10 19:10:35,421 - werkzeug - WARNING -  * Debugger is active!
+2025-05-10 19:10:35,498 - werkzeug - INFO -  * Debugger PIN: 851-510-513
+2025-05-10 19:10:35,636 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:10:35] "[33mGET / HTTP/1.1[0m" 404 -
+2025-05-10 19:10:35,732 - werkzeug - INFO - 127.0.0.1 - - [10/May/2025 19:10:35] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -

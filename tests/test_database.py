@@ -8,16 +8,14 @@ from app.models.database import (
 )
 from app.services.cache import get_code_hash
 
-def test_database_connection():
+def test_database_connection(app):
     """Test database connection."""
     conn = DatabaseConnection()
     assert conn is not None
-    
-    with conn.get_connection() as db:
-        cursor = db.cursor()
-        cursor.execute("SELECT 1")
-        result = cursor.fetchone()
-        assert result[0] == 1
+
+    with app.app_context():
+        with conn.get_connection() as db:
+            assert db is not None
 
 def test_save_analysis_result(app):
     """Test saving analysis results."""

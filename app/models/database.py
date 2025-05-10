@@ -13,6 +13,7 @@ class DatabaseConnection:
     _pool = []
     _lock = threading.Lock()
     _max_connections = 5
+    _db_path = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -21,6 +22,10 @@ class DatabaseConnection:
                     cls._instance = super(DatabaseConnection, cls).__new__(cls)
         return cls._instance
 
+    def init_app(self, app):
+        """Initialize the database connection with the app context."""
+        self._db_path = app.config['DATABASE_URL'].replace('sqlite:///', '')
+
     @contextmanager
     def get_connection(self):
         """Get a database connection from the pool with proper cleanup."""
@@ -28,10 +33,9 @@ class DatabaseConnection:
         try:
             with self._lock:
                 if not self._pool:
-                    conn = sqlite3.connect(
-                        current_app.config['DATABASE_URL'].replace('sqlite:///', ''),
-                        check_same_thread=False
-                    )
+                    if not self._db_path:
+                        raise RuntimeError("Database not initialized. Call init_app first.")
+                    conn = sqlite3.connect(self._db_path, check_same_thread=False)
                     conn.row_factory = sqlite3.Row
                     self._pool.append(conn)
                 conn = self._pool[0]
@@ -71,7 +75,7 @@ def init_db():
         with DatabaseConnection().get_connection() as conn:
             cursor = conn.cursor()
             
-            # Create analysis results table with improved indexing
+            # Create analysis results table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS analysis_results (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,14 +87,11 @@ def init_db():
                     code_hash TEXT UNIQUE,
                     vulnerabilities TEXT,
                     severity_counts TEXT,
-                    execution_time REAL,
-                    INDEX idx_code_hash (code_hash),
-                    INDEX idx_timestamp (timestamp),
-                    INDEX idx_language (language)
+                    execution_time REAL
                 )
             """)
             
-            # Create dependency vulnerabilities table with improved indexing
+            # Create dependency vulnerabilities table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS dependency_vulnerabilities (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,14 +102,17 @@ def init_db():
                     fix TEXT,
                     severity TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (analysis_id) REFERENCES analysis_results (id) ON DELETE CASCADE,
-                    INDEX idx_analysis_id (analysis_id),
-                    INDEX idx_package (package),
-                    INDEX idx_created_at (created_at)
+                    FOREIGN KEY (analysis_id) REFERENCES analysis_results (id) ON DELETE CASCADE
                 )
             """)
             
-            # Create indexes for better query performance
+            # Create indexes separately after tables are created
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_code_hash ON analysis_results(code_hash)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON analysis_results(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_language ON analysis_results(language)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_analysis_id ON dependency_vulnerabilities(analysis_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_package ON dependency_vulnerabilities(package)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON dependency_vulnerabilities(created_at)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_analysis_language ON analysis_results(language, timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dep_vuln_package ON dependency_vulnerabilities(package, version)")
             

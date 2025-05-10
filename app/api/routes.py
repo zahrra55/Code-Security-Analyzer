@@ -5,7 +5,6 @@ from app.services.report import generate_security_report
 from app.services.cache import get_cached_result, cache_result
 import logging
 import os
-from app import limiter  # Import the limiter instance from app/__init__.py
 
 api_bp = Blueprint('api', __name__)
 logger = logging.getLogger(__name__)
@@ -14,10 +13,14 @@ logger = logging.getLogger(__name__)
 analyzer = CodeAnalyzer()
 
 @api_bp.route('/analyze', methods=['POST'])
-@limiter.limit("10 per minute")
 def analyze_code():
     """Analyze code for security vulnerabilities."""
     try:
+        # Get the limiter instance from current_app
+        limiter = current_app.extensions['limiter']
+        # Apply rate limit
+        limiter.check()
+        
         # Validate request
         data = validate_analysis_request(request)
         if not data:

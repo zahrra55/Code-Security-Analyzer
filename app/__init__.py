@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify, render_template
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from prometheus_client import Counter, Histogram
@@ -40,36 +40,57 @@ ANALYSIS_DURATION = Histogram('code_analysis_duration_seconds', 'Time spent anal
 VULNERABILITY_COUNTER = Counter('vulnerabilities_detected_total', 'Total number of vulnerabilities detected', ['severity'])
 API_ERROR_COUNTER = Counter('api_errors_total', 'Total number of API errors', ['endpoint', 'error_type'])
 
-def create_app(config_class=Config):
+def create_app(config=None):
     """Create and configure the Flask application."""
     app = Flask(__name__)
-    app.config.from_object(config_class)
+    
+    # Load configuration
+    if config is None:
+        from config.default import Config
+        app.config.from_object(Config)
+    else:
+        app.config.from_object(config)
     
     # Setup logging
     setup_logging(app)
+    logger = logging.getLogger(__name__)
     
-    # Initialize rate limiter
+    # Initialize extensions
     limiter = Limiter(
         app=app,
         key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"],
         storage_uri=app.config['RATE_LIMIT_STORAGE_URL'],
         strategy=app.config['RATE_LIMIT_STRATEGY']
     )
+    app.extensions['limiter'] = limiter
+    
+    # Initialize database
+    db = DatabaseConnection()
+    db.init_app(app)
     
     # Register blueprints
     from app.api.routes import api_bp
-    app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(api_bp)
     
-    # Initialize database
-    try:
-        from app.models.database import init_db
-        init_db()
-        logger = logging.getLogger(__name__)
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Error initializing database: {e}")
-        raise
+    # Add root route
+    @app.route('/')
+    def index():
+        return render_template('index.html')
+    
+    # Add favicon route
+    @app.route('/favicon.ico')
+    def favicon():
+        return app.send_static_file('favicon.ico')
+    
+    # Initialize database within app context
+    with app.app_context():
+        try:
+            from app.models.database import init_db
+            init_db()
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing database: {e}")
+            raise
     
     # Create necessary directories
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -79,17 +100,17 @@ def create_app(config_class=Config):
     @app.errorhandler(404)
     def not_found_error(error):
         API_ERROR_COUNTER.labels(endpoint='404', error_type='not_found').inc()
-        return {'error': 'Not found'}, 404
+        return jsonify({'error': 'Not found'}), 404
     
     @app.errorhandler(500)
     def internal_error(error):
         API_ERROR_COUNTER.labels(endpoint='500', error_type='internal').inc()
-        return {'error': 'Internal server error'}, 500
+        return jsonify({'error': 'Internal server error'}), 500
     
     @app.errorhandler(429)
     def ratelimit_error(error):
         API_ERROR_COUNTER.labels(endpoint='429', error_type='ratelimit').inc()
-        return {'error': 'Rate limit exceeded'}, 429
+        return jsonify({'error': 'Rate limit exceeded'}), 429
     
     # Register cleanup function
     @app.teardown_appcontext
